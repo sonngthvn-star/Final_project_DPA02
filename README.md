@@ -1,6 +1,8 @@
 🌍 Air Quality Monitoring Pipeline (DPA Final Project):
-An End-to-End Data Engineering Pipeline.
-Combining Python Project PY4E03 and DPA ETL PIPELINE. This project implements a Medallion Architecture to transform raw WAQI API data into high-performance insights for air quality monitoring.
+   - An End-to-End Data Engineering Pipeline.
+   -  Combining Python Project PY4E03 and DPA ETL PIPELINE.
+   -  This project implements a Medallion Architecture to transform raw WAQI API data into high-performance insights for air quality monitoring.
+________________________________________
 
 🏗️ 1. Project Architecture & Data Flow:
 
@@ -19,6 +21,7 @@ The system processes data through three distinct stages to ensure high data inte
 <strong>Figure 1: Medallion Architecture Data Flow (WAQI API to Dashboard)</strong>
 </p>
 
+________________________________________
 🛠️ 2. Tech Stack:
 
 This project leverages a modern data engineering stack to handle automation, storage, and visualization:
@@ -32,6 +35,7 @@ This project leverages a modern data engineering stack to handle automation, sto
     * Database: PostgreSQL (Relational Data Warehouse).
 
     * Infrastructure: Docker & Docker Compose.    
+________________________________________
 
 🚀 3. Installation & Setup
 
@@ -44,7 +48,9 @@ Phase A: Environment Configuration
 Phase B: Deployment (Choose One Path)
 
 Option 1: Docker Deployment (Recommended)
-    1.	Set DB Host: Ensure DB_HOST=postgres_dw in your .env. 
+
+    1.	Set DB Host: Ensure DB_HOST=postgres_dw in your .env.
+    
     2.	Initialize Airflow:
 
         Bash
@@ -60,7 +66,9 @@ Option 1: Docker Deployment (Recommended)
     o	Airflow UI: http://localhost:8081 (Login: airflow / airflow)
 
 Option 2: Local Windows Development (Manual)
-    1.	Set DB Host: Ensure DB_HOST=localhost in your .env. 
+
+    1.	Set DB Host: Ensure DB_HOST=localhost in your .env.
+    
     2.	Setup Virtual Environment:
 
         Bash
@@ -73,26 +81,30 @@ Option 2: Local Windows Development (Manual)
         Bash
         python scripts/init_db.py
         python dashboard/myproject.py
-    ________________________________________
+________________________________________
 
 📁 4. Project Structure:
 This documentation reflects the exact organization of the repository:
 
 <p align="center">
 <img src="project_structure.jpg" alt="Project Folder Structure" width="500">
-Plaintext
 
 <strong>Figure 2: Project Folder Structure</strong>
 </p>
 
+________________________________________
+
 📊 5. Key Features
     •	Full ETL Automation: Automated flow from API scraping to Silver-layer validation orchestrated by Airflow.
+    
     •	Medallion CRUD: Ability to Update and Delete records in the Silver-layer directly via the "Data Management" table.
+    
     •	Geospatial Mapping: Interactive Leaflet.js map with color-coded markers for global city AQI levels.
+    
     •	Professional Logging: Centralized logger_config.py tracking all pipeline events in the /logs directory. 
 ________________________________________
 
 
-*****************************************************************************************
-Developed by Son Nguyen - Final Project for Data Engineering Course (PY4E03 & TC_DPA02)
-*****************************************************************************************
+********************************************************************************************************
+Developed by Son Nguyen - Final Project for Data Engineering Course Level 2 (Combined PY4E03 & TC_DPA02)
+********************************************************************************************************
