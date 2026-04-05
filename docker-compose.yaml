@@ -1,0 +1,198 @@
+version: '3.8'
+
+# ==============================================================================
+# STEP 1: CONFIGURATION TEMPLATE (x-airflow-common)
+# We use a YAML "Anchor" (&airflow-common) to define settings once.
+# This ensures the Webserver and Scheduler stay perfectly synchronized.
+# ==============================================================================
+x-airflow-common:
+  &airflow-common
+  # Uses the image version from .env; defaults to 2.8.1 if not specified.
+  image: ${AIRFLOW_IMAGE:-apache/airflow:2.8.1}
+  
+  # Environment variables shared across all Airflow components.
+  environment:
+    &airflow-common-env
+    # The 'LocalExecutor' allows Airflow to run multiple tasks in your DAG simultaneously.
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    
+    # METADATA CONNECTION: Tells Airflow where to store its own internal logs/user data.
+    # Note: We use port 5432 here because this is INTERNAL container communication.
+    AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@postgres_airflow:5432/${AIRFLOW_DB_NAME}
+    
+    # SECURITY & DEFAULTS
+    AIRFLOW__CORE__FERNET_KEY: ''
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'false'
+
+    # --- ADDED FOR API ACCESS ---
+    # Enable Basic Auth so Flask can log in with username/password
+    AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
+    # Disable CSRF for the API to allow remote POST requests from your Dashboard
+    AIRFLOW__WEBSERVER__ENFORCE_CSRF: 'False'
+    # ----------------------------
+    
+    # DYNAMIC DEPENDENCIES: Installs your required Python libraries on startup.
+    _PIP_ADDITIONAL_REQUIREMENTS: "psycopg2-binary pandas requests python-dotenv loguru"    
+    
+    # --- TIMEZONE FIX ---
+    TZ: Asia/Ho_Chi_Minh
+
+    # PROJECT-SPECIFIC VARIABLES (DPA Project)
+    TARGET_POSTGRES_USER: ${TARGET_POSTGRES_USER}
+    TARGET_POSTGRES_PASSWORD: ${TARGET_POSTGRES_PASSWORD}
+    TARGET_POSTGRES_DB: ${TARGET_POSTGRES_DB}
+    DB_HOST: ${DB_HOST}
+    DB_PORT_INTERNAL: ${DB_PORT_INTERNAL}
+    DB_ROOT_NAME: ${DB_ROOT_NAME}
+    
+    # Add your new API token here so the containers can see it
+    WAQI_API_TOKEN: ${WAQI_API_TOKEN}
+
+    # PYTHONPATH: Ensures the Python interpreter looks in the /scripts folder for your modules.
+    PYTHONPATH: /opt/airflow/scripts
+    
+  # MOUNTING: Maps your local project folders to the folders inside the container.
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./logs:/opt/airflow/logs
+    - ./plugins:/opt/airflow/plugins
+    - ./scripts:/opt/airflow/scripts
+    - ./database:/opt/airflow/database
+  
+  # USER PERMISSIONS: 50000 is the default Airflow user ID.
+  user: "${AIRFLOW_UID:-50000}:0"
+
+# ==============================================================================
+# STEP 2: SERVICE DEFINITIONS
+# ==============================================================================
+services:
+
+  # --- SERVICE 1: THE AIRFLOW METADATA DATABASE (INTERNAL) ---
+  # This Postgres instance stores all DAG history and Airflow state.
+  postgres_airflow:
+    image: postgres:13
+    container_name: postgres_airflow
+    environment:
+      POSTGRES_USER: ${AIRFLOW_DB_USER}
+      POSTGRES_PASSWORD: ${AIRFLOW_DB_PASSWORD}
+      POSTGRES_DB: ${AIRFLOW_DB_NAME}
+      TZ: Asia/Ho_Chi_Minh
+      PGTZ: Asia/Ho_Chi_Minh
+    volumes:
+      - postgres-db-volume:/var/lib/postgresql/data # FIXED: Added Volume Mapping
+    healthcheck:
+      # This checks if the PostgreSQL database is ready to accept connections.
+      test: ["CMD", "pg_isready", "-U", "${AIRFLOW_DB_USER}"] 
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always # If the container stops for any reason, Docker will automatically restart it.
+
+  # --- SERVICE 2: THE DATA WAREHOUSE DATABASE (PROJECT) ---
+  # This is your Medallion Storage (Bronze, Silver, Gold).
+  postgres_dw:
+    image: postgres:13
+    container_name: postgres_dw
+    environment:
+      POSTGRES_USER: ${TARGET_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${TARGET_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${TARGET_POSTGRES_DB}
+      TZ: Asia/Ho_Chi_Minh
+      PGTZ: Asia/Ho_Chi_Minh
+    ports:
+      # Maps Host Port (e.g. 5433) to Container Port 5432.
+      - "${DB_PORT_EXTERNAL}:5432"
+    volumes:
+      - dw-db-volume:/var/lib/postgresql/data # FIXED: Added Volume Mapping 
+    healthcheck:          
+      test: ["CMD", "pg_isready", "-U", "${TARGET_POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always # If the container stops for any reason, Docker will automatically restart it.
+
+  # --- SERVICE 3: THE AIRFLOW INITIALIZER ---
+  # Runs once to upgrade the DB and create the 'admin' user.
+  airflow-init:
+    <<: *airflow-common
+    container_name: airflow_init
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        # 1. Initialize the database
+        airflow db init
+        
+        # 2. Create the Dashboard API User (using your .env credentials)
+        airflow users create \
+          --username "${AIRFLOW_DB_USER}" \
+          --password "${AIRFLOW_DB_PASSWORD}" \
+          --firstname Son \
+          --lastname Nguyen \
+          --role Admin \
+          --email admin@example.com
+        
+        # 3. Create the standard login user (admin/admin)
+        airflow users create \
+          --username admin \
+          --password admin \
+          --firstname Default \
+          --lastname Admin \
+          --role Admin \
+          --email info@example.com
+    environment:
+      <<: *airflow-common-env
+      _AIRFLOW_DB_UPGRADE: 'true'
+      # We disable the automatic creation variables to avoid conflict with our script above
+      _AIRFLOW_WWW_USER_CREATE: 'false'      
+      # _AIRFLOW_WWW_USER_USERNAME: admin
+      # _AIRFLOW_WWW_USER_PASSWORD: admin
+      # _AIRFLOW_WWW_USER_ROLE: Admin
+      # Wait for both databases to be ready before initializing.
+    depends_on:
+      postgres_airflow:
+        condition: service_healthy
+      postgres_dw:
+        condition: service_healthy
+
+  # --- SERVICE 4: THE AIRFLOW WEBSERVER (UI) ---
+  # Provides the dashboard at http://localhost:8081.
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: airflow_webserver
+    command: webserver
+    ports:
+      - "8081:8080"
+    healthcheck:
+      # This checks if the webserver is healthy by trying to access its health endpoint.
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    # Only starts after initialization is successful.
+    depends_on:      
+      airflow-init:
+        condition: service_completed_successfully
+    restart: always # If the container stops for any reason, Docker will automatically restart it.
+
+  # --- SERVICE 5: THE AIRFLOW SCHEDULER (BRAIN) ---
+  # Triggers the DAG tasks in your Medallion pipeline.
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: airflow_scheduler
+    command: scheduler
+    depends_on:      
+      airflow-init:
+        condition: service_completed_successfully
+    restart: always # If the container stops for any reason, Docker will automatically restart it.
+
+# ==============================================================================
+# STEP 3: PERSISTENT STORAGE (VOLUMES)
+# These named volumes ensure your data persists even if containers are deleted.
+# ==============================================================================
+volumes:
+  postgres-db-volume:
+    external: false
+  dw-db-volume:
+    external: false

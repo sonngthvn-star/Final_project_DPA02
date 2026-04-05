@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Air Quality Monitoring Portal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/1684/1684375.png">
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+    <!-- <link rel="stylesheet" href="style.css"> -->
+            
+</head>
+<body class="bg-[#f8fafc] min-h-screen pb-12">
+
+    <header class="bg-[#3b36db] text-white p-6 shadow-md mb-8">
+        <div class="container mx-auto flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-bold tracking-tight">🌬️ Air Quality Monitoring Pipeline</h1>
+                <p class="text-indigo-100 text-sm opacity-90">Regional Comparison & Environmental Correlation</p>
+            </div>
+            <div class="flex items-center space-x-6">
+                <div class="text-right">
+                    <p class="text-[10px] uppercase font-bold text-indigo-200 tracking-widest">LAST API FETCHED FROM WAQI</p>
+                    <p id="last-update-time" class="text-xl font-bold">N/A</p>
+                </div>
+                <button onclick="exportToPDF()" class="bg-white text-[#3b36db] px-5 py-2 rounded-lg font-bold hover:bg-indigo-50 shadow-lg flex items-center gap-2 transition-transform active:scale-95">
+                    📥 Export Report (PDF)
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div id="dashboard-content" class="container mx-auto px-4 grid grid-cols-1 lg:grid-cols-4 gap-6">
+        
+        <aside class="lg:col-span-1 flex flex-col space-y-4 no-export">
+
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2"><span>📖</span> Standard AQI Range</h2>
+                <div class="space-y-2">
+                    <div class="p-2 bg-green-50 border-l-4 border-green-500 text-green-700 font-bold text-xs">
+                        <span id="range-good">0 - 50</span> Healthy
+                    </div>
+                    <div class="p-2 bg-yellow-50 border-l-4 border-yellow-400 text-yellow-700 font-bold text-xs">
+                        <span id="range-moderate">51 - 100</span> Moderate
+                    </div>
+                    <div class="p-2 bg-red-50 border-l-4 border-red-500 text-red-700 font-bold text-xs">
+                        <span id="range-unhealthy">101+</span> Unhealthy
+                    </div>
+                </div>
+            </div>
+
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 mt-4">
+            <div class="mb-4">
+                <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+                    ⚙️ Adjust AQI Thresholds
+                </h3>
+                <p class="text-slate-400 text-[10px]">Customize the "Good" and "Unhealthy" ranges</p>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-[9px] font-bold text-slate-400 uppercase mb-1">Max "Good" (Green)</label>
+                    <input type="number" id="threshold-good" value="50" 
+                        class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-green-500">
+                </div>
+                <div>
+                    <label class="block text-[9px] font-bold text-slate-400 uppercase mb-1">Max "Moderate" (Yellow)</label>
+                    <input type="number" id="threshold-moderate" value="100" 
+                        class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-yellow-500">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 mt-4">
+                <button onclick="updateThresholds()" class="bg-indigo-600 text-white py-2 rounded-lg text-[10px] font-bold hover:bg-indigo-700 transition-all">
+                    Apply Changes
+                </button>
+                <button onclick="resetThresholds()" class="bg-slate-100 text-slate-600 py-2 rounded-lg text-[10px] font-bold hover:bg-slate-200 transition-all">
+                    Reset Defaults
+                </button>
+            </div>
+            <p class="mt-3 text-[9px] text-slate-400 italic">* Values above Moderate will be marked as Unhealthy.</p>
+        </div>
+
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-bold text-slate-800 mb-4">Visualization Settings</h2>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="text-[10px] font-bold text-slate-400 uppercase block mb-1">Chart Type for AQI</label>
+                        <select id="type-top" class="w-full p-2 bg-slate-50 border rounded-lg text-sm font-semibold">
+                            <option value="line">Line Chart</option>
+                            <option value="area">Area Chart</option>
+                            <option value="bar">Column Chart</option>
+                            <option value="pie">Pie Chart</option>
+                            <option value="doughnut">Donut Chart</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="text-[10px] font-bold text-slate-400 uppercase block mb-1">Chart Type For PM.5 & PM10</label>
+                        <select id="type-bottom" class="w-full p-2 bg-slate-50 border rounded-lg text-sm font-semibold">
+                            <option value="line">Line Chart</option>
+                            <option value="area">Area Chart</option>
+                            <option value="bar" selected>Column Chart</option>
+                            <option value="pie">Pie Chart</option>
+                            <option value="doughnut">Donut Chart</option>
+                        </select>
+                    </div>
+
+                    <div class="pt-2 border-t">
+                        <label class="text-[10px] font-bold text-slate-400 uppercase block mb-2">Parameter Selection</label>
+                        <div class="grid grid-cols-2 gap-2 text-[11px] font-bold">
+                            <label class="flex items-center space-x-2"><input type="checkbox" class="param-toggle" value="PM25" checked> <span>PM2.5</span></label>
+                            <label class="flex items-center space-x-2"><input type="checkbox" class="param-toggle" value="PM10"> <span>PM10</span></label>
+                        </div>
+                    </div>
+
+                    <div class="pt-2 border-t">
+                        <p class="text-[10px] font-bold text-slate-400 uppercase mb-2">Regional Selection</p>
+                        <div class="space-y-1 max-h-48 overflow-y-auto custom-scroll text-xs font-medium">
+                            <label class="flex items-center space-x-2 p-1 hover:bg-slate-50 rounded"><input type="checkbox" value="Perth" class="city-toggle" checked><span>Australia (Perth)</span></label>
+                            <label class="flex items-center space-x-2 p-1 hover:bg-slate-50 rounded"><input type="checkbox" value="Jakarta" class="city-toggle" checked><span>Indonesia (Jakarta)</span></label>
+                            <label class="flex items-center space-x-2 p-1 hover:bg-slate-50 rounded"><input type="checkbox" value="Manila" class="city-toggle"><span>Philippines (Manila)</span></label>
+                            <label class="flex items-center space-x-2 p-1 hover:bg-slate-50 rounded"><input type="checkbox" value="Bangkok" class="city-toggle"><span>Thailand (Bangkok)</span></label>
+                            <label class="flex items-center space-x-2 p-1 hover:bg-slate-50 rounded"><input type="checkbox" value="Singapore" class="city-toggle"><span>Singapore</span></label>
+                            <label class="flex items-center space-x-2 p-1 hover:bg-slate-50 rounded"><input type="checkbox" value="Beijing" class="city-toggle"><span>China (Beijing)</span></label>
+                            <label class="flex items-center space-x-2 p-1 hover:bg-slate-50 rounded"><input type="checkbox" value="Shanghai" class="city-toggle"><span>China (Shanghai)</span></label>
+                            <label class="flex items-center space-x-2 p-1 hover:bg-slate-50 rounded"><input type="checkbox" value="Kuala Lumpur" class="city-toggle"><span>Malaysia (KL)</span></label>                            
+                        </div>
+                    </div>
+                </div>
+ 
+                <div class="mt-auto flex flex-col space-y-3"> 
+                    
+                    <button onclick="updateDashboard()" class="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-200">Update Dashboard</button>
+
+                    <button onclick="triggerScrape()" id="scrape-btn" class="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold hover:bg-emerald-700 transition-all flex justify-center items-center gap-2 border border-emerald-500 shadow-sm">
+                        <span>🔄</span> TriggerDAG-Fetch New Data</button>
+                    
+                </div>
+ 
+            </div>
+
+            <div class="bg-[#3b36db] p-6 rounded-2xl shadow-xl text-white mt-auto">
+                <p class="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-1">REGIONAL AVERAGE AQI SCORE OF CITIES IN CHART</p>
+                <div class="flex items-baseline gap-2">
+                    <span id="avg-aqi" class="text-5xl font-black">--</span>
+                    <span class="text-xl font-bold">AQI</span>
+                </div>
+                <p id="avg-status" class="text-[10px] font-black uppercase mt-2 opacity-90 italic">calculating status...</p>
+            </div>
+        </aside>
+
+        <main class="lg:col-span-3 space-y-6">
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div id="card-Saigon" class="p-6 rounded-2xl bg-white shadow-sm border-l-8 border-slate-200">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h3 class="font-bold text-lg uppercase text-slate-800">Current Air Quality @ HCM City</h3>
+                            <div id="saigon-trend" class="text-[10px] font-bold mt-1 flex items-center gap-1"></div>
+                        </div>
+                        <span id="label-Saigon" class="px-2 py-1 rounded text-[10px] font-black uppercase">--</span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 mt-4 text-center">
+                        <div class="bg-slate-50 p-2 rounded-xl"><p class="text-[9px] text-slate-400 font-bold">AQI</p><p id="aqi-Saigon" class="text-xl font-black">--</p></div>
+                        <div class="bg-slate-50 p-2 rounded-xl"><p class="text-[9px] text-slate-400 font-bold">PM2.5</p><p id="pm25-Saigon" class="text-xl font-black">--</p></div>
+                        <div class="bg-slate-50 p-2 rounded-xl"><p class="text-[9px] text-slate-400 font-bold">PM10</p><p id="pm10-Saigon" class="text-xl font-black">--</p></div>
+                    </div>
+                </div>
+
+                <div id="card-Hanoi" class="p-6 rounded-2xl bg-white shadow-sm border-l-8 border-slate-200">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h3 class="font-bold text-lg uppercase text-slate-800">Current Air Quality @ Hanoi</h3>
+                            <div id="hanoi-trend" class="text-[10px] font-bold mt-1 flex items-center gap-1"></div>
+                        </div>
+                        <span id="label-Hanoi" class="px-2 py-1 rounded text-[10px] font-black uppercase">--</span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 mt-4 text-center">
+                        <div class="bg-slate-50 p-2 rounded-xl"><p class="text-[9px] text-slate-400 font-bold">AQI</p><p id="aqi-Hanoi" class="text-xl font-black">--</p></div>
+                        <div class="bg-slate-50 p-2 rounded-xl"><p class="text-[9px] text-slate-400 font-bold">PM2.5</p><p id="pm25-Hanoi" class="text-xl font-black">--</p></div>
+                        <div class="bg-slate-50 p-2 rounded-xl"><p class="text-[9px] text-slate-400 font-bold">PM10</p><p id="pm10-Hanoi" class="text-xl font-black">--</p></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <h2 class="text-xs font-black text-slate-500 mb-4 uppercase tracking-widest">AQI @ HCM & Hanoi - Comparison with Other Cities @ Hourly</h2>
+                <div class="h-[300px]"><canvas id="primaryChart"></canvas></div>
+            </div>
+
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <h2 class="text-xs font-black text-slate-500 mb-4 uppercase tracking-widest">PM2.5 / PM10 @ HCM & Hanoi - Comparison with Other Cities @ Hourly</h2>
+                <div class="h-[300px]"><canvas id="secondaryChart"></canvas></div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+                
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+                    <h2 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        <span>🌍</span> Regional Air Quality Map
+                    </h2>
+                    <div id="aqiMap" class="rounded-xl border border-slate-100" style="height: 450px;"></div>
+                </div>
+
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col h-full">
+                <div class="mb-6">
+                    <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                        <span>📊</span> Data Management (PostgreSQL Table - Silver Layer )
+                    </h2>
+                    <p class="text-slate-400 text-[10px]">Edit or delete historical records</p>
+                </div>
+
+                <div class="flex flex-col sm:flex-row gap-3 mb-4">
+                    <div class="relative flex-1">
+                        <span class="absolute left-3 top-2.5 text-slate-400 text-xs">🔍</span>
+                        <input type="text" id="table-search" onkeyup="filterTable()" placeholder="Search city / id..." 
+                            class="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div class="flex gap-2 items-center">
+                        <input type="date" id="date-from" onchange="filterTable()" class="p-2 border border-slate-200 rounded-lg text-[10px]">
+                        <span class="text-slate-400 text-xs">to</span>
+                        <input type="date" id="date-to" onchange="filterTable()" class="p-2 border border-slate-200 rounded-lg text-[10px]">
+                        
+                        <button onclick="clearFilters()" class="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-500 transition-colors" title="Clear Filters">
+                            ✕
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="overflow-x-auto overflow-y-auto flex-1 custom-scroll border border-slate-50 rounded-lg" style="max-height: 295px;">
+                    <table class="min-w-full text-left border-collapse" id="data-table">
+                        <thead class="sticky top-0 bg-white z-10 shadow-sm">
+                            <tr class="text-slate-400 text-[9px] uppercase tracking-wider border-b border-slate-100">
+                                <th class="p-2 font-semibold">ID</th>
+                                <th class="p-2 font-semibold">City</th>
+                                <th class="p-2 font-semibold">Date</th>
+                                <th class="p-2 font-semibold">AQI</th>
+                                <th class="p-2 font-semibold">PM2.5</th>
+                                <th class="p-2 font-semibold">PM10</th>
+                                <th class="p-2 font-semibold text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="management-table-body" class="text-slate-600"></tbody>
+                    </table>
+                </div>
+                
+                <button onclick="loadManagementData()" class="mt-4 w-full text-[10px] bg-blue-50 hover:bg-blue-100 text-blue-600 py-2.5 rounded-lg font-bold transition-all border border-blue-100 uppercase tracking-widest">
+                    🔄 Refresh Table List
+                </button>
+            </div>
+ 
+            </div>
+
+        </main>
+    </div>
+  
+
+    <div id="toast-container" class="fixed bottom-5 right-5 z-[9999] flex flex-col gap-3"></div>
+
+    <!-- creates the hidden pop-up window --> 
+    <div id="editModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[9999] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all">
+            <div class="bg-[#3b36db] p-6 text-white">
+                <h3 class="text-xl font-bold">Edit Air Quality Record</h3>
+                <p id="modal-subtitle" class="text-indigo-100 text-xs opacity-80 uppercase tracking-widest mt-1"></p>
+                <button onclick="closeEditModal()" class="absolute top-4 right-4 text-white hover:text-gray-200 text-1xl font-bold">Close</button>
+            </div>
+            <div class="p-6 space-y-4">
+                <input type="hidden" id="edit-id">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">AQI Value</label>
+                    <input type="number" id="edit-aqi" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-blue-600">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">PM2.5</label>
+                        <input type="number" step="0.1" id="edit-pm25" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-semibold">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">PM10</label>
+                        <input type="number" step="0.1" id="edit-pm10" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-semibold">
+                    </div>
+                </div>
+                <div class="flex gap-3 pt-4">
+                    <button onclick="closeEditModal()" class="flex-1 px-4 py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-100 transition-colors">Cancel</button>
+                    <button onclick="submitEdit()" class="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- ADD THE FOOTER HTML: -->
+    <footer class="mt-12 pb-8">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="border-t border-slate-200 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xs">AQ</div>
+                    <span class="text-slate-600 font-bold text-sm">Air Quality Monitoring Project- PY4E03 & TC_DPA02 Course</span>
+                </div>
+                
+                <div class="text-slate-400 text-xs font-medium">
+                    © Designed and Developed by Son Nguyen
+                </div>
+                
+                <div class="flex gap-6 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    <a href="#" class="hover:text-blue-600 transition-colors">Data Source: WAQI API</a>
+                    <a href="#" class="hover:text-blue-600 transition-colors">System Status: Online</a>
+                </div>
+            </div>
+        </div>
+    </footer> 
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <!-- <script src="script.js"></script> -->
+
+</body>
+</html>

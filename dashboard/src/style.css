@@ -1,0 +1,30 @@
+/* static/style.css for design with static = "src" being defined in Flask app = Flask(__name__, static_folder="src") */
+
+#aqiMap { height: 400px; width: 100%; border-radius: 1rem; z-index: 1; }
+        .custom-scroll::-webkit-scrollbar { width: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+.animate-spin-custom {
+    animation: spin 1s linear infinite;
+}
+
+.no-print {
+        display: none !important;
+    }
+
+@media print {
+    /* This ensures the charts and map resize to fit the A4 width */
+    main {
+        width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    canvas {
+        max-width: 100% !important;
+        height: auto !important;
+    }
+}

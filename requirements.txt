@@ -1,0 +1,17 @@
+# --- 1. WEB SERVER & API (For the Dashboard) ---
+flask==3.1.2                # The core web framework
+flask_cors==3.0.10          # Allows your browser to talk to the local API
+python-dotenv==1.2.1        # Loads your .env file credentials
+requests==2.32.5            # Used by the scraper to call the WAQI API
+
+# --- 2. DATA PROCESSING & DB BRIDGE ---
+pandas==2.3.3               # For data manipulation and SQL reading
+numpy==2.3.5                # Required by Pandas for calculations
+sqlalchemy==2.0.25          # CRITICAL: Connects Pandas to PostgreSQL
+psycopg2-binary==2.9.9      # The low-level PostgreSQL driver
+
+# --- 3. ORCHESTRATION & LOGGING ---
+apache-airflow==2.8.1       # The engine running your Medallion pipeline
+loguru==0.7.2               # For clean, professional error logging
+
+

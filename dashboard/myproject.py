@@ -1,0 +1,242 @@
+# Import necessary libraries
+from flask import Flask, jsonify, request, render_template
+from flask_cors import CORS
+import pandas as pd
+import sys
+import os
+from sqlalchemy import text
+import subprocess  # Import subprocess for running shell commands
+import requests # 
+from requests.auth import HTTPBasicAuth
+
+# ==============================================================================
+# STEP 1: SYSTEM PATH, DATABASE IMPORT & UTILITIES
+# ==============================================================================
+# Ensure the 'scripts' directory is in the system path for module imports
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'scripts'))
+from db_connection import get_sqlalchemy_engine, get_db_connection
+
+# Initialize the Flask application
+app = Flask(__name__, static_folder='src')
+CORS(app) # Allow cross-origin requests for the frontend to communicate with the backend
+
+# Create a function to standardize various forms of Saigon/HCMC and Kuala Lumpur to a consistency name
+def normalize_city_name(city_input):
+    # Clean the input: remove extra whitespace and convert to lowercase for comparison
+    clean_input = str(city_input).strip().lower()
+    
+    # Define acceptable variations
+    saigon_variants = ["saigon", "ho chi minh", "ho chi minh city", "hcmc", "tphcm", "tp.hcm", "hcm" ]
+
+    Kuala_Lumpur_variants = ["kuala lumpur", "kuala lumpur city", "kl" ]
+
+    # Check if the input is in the list of variants
+    if clean_input in saigon_variants:
+        return "Saigon"
+    
+    elif clean_input in Kuala_Lumpur_variants:
+        return "Kuala Lumpur"
+    
+    else:
+        # Return the original title-cased name if it's a different city
+        return city_input.title()
+
+# Initialize the SQLAlchemy engine for Pandas Read operations
+engine = get_sqlalchemy_engine()
+
+# Create API Home page
+@app.route('/')
+def index():
+    """Renders the main dashboard HTML page."""
+    return render_template('index.html')
+
+# ==============================================================================
+# STEP 2: API ENDPOINTS (CRUD OPERATIONS & DATA RETRIEVAL)
+# ==============================================================================
+
+# --- 2.1: READ CURRENT SNAPSHOT (GET) ---
+# API Endpoint 'api/current' for current dataset of all cities 
+@app.route('/api/current', methods=['GET'])
+def get_current_data():
+    """
+    Fetches the latest snapshot from the GOLD layer for dashboard cards and map.
+    """
+    try:
+        # 1. Update query to include the "time" column from your Gold view
+        query = 'SELECT city, aqi, pm25, pm10, "time" FROM gold_latest_snapshot'
+        df = pd.read_sql(query, engine) # Read the data from the database
+        
+        # 2. Format the 'time' column to a readable string
+        if not df.empty and 'time' in df.columns:
+            df['time'] = pd.to_datetime(df['time']).dt.strftime("%d/%m/%Y %H:%M")
+            
+        return jsonify(df.to_dict(orient='records')) # Return the data as JSON 
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500  
+    
+# --- 2.2: READ HISTORY (GET) ---
+# API Endpoint 'api/history' for history dataset of all cities
+@app.route('/api/history', methods=['GET'])
+def get_all_history():
+    """
+    Fetches the full historical dataset from the SILVER layer for the management table.
+    """
+    try:
+        # This feeds the data management table on Dashboard (Frontend)
+        query = "SELECT * FROM silver_air_quality ORDER BY recorded_at ASC"
+        df = pd.read_sql(query, engine)
+        return jsonify(df.to_dict(orient='records'))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# API Endpoint 'api/history/<city>' for history data of a specific city
+@app.route('/api/history/<city>', methods=['GET'])
+def get_city_history(city):
+
+    # Normalize the city name (e.g., HCMC -> Saigon)
+    normalized_city = normalize_city_name(city)     
+    """
+    Fetches historical data for a specific city to populate charts.
+    """
+    try:
+        # This feeds the specific city charts (Saigon, Hanoi, Perth, etc.)
+        # Wrap the query in text() to enable :city parameter mapping
+        query = text("SELECT * FROM silver_air_quality WHERE city_name = :city ORDER BY recorded_at ASC")
+        
+        # Pass the dictionary to params
+        df = pd.read_sql(query, engine, params={"city": normalized_city})
+        
+        return jsonify(df.to_dict(orient='records'))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500    
+
+# --- 2.3: CREATE (POST) ---
+@app.route('/api/records', methods=['POST'])
+def add_record():
+    """CREATE Operation: Manually add a new record to the Silver Layer."""
+    data = request.json
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({"error": "Database connection failed"}), 500
+    try:
+        cur = conn.cursor()
+        query = """
+        INSERT INTO silver_air_quality (city_name, aqi, pm25, pm10, recorded_at)
+        VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+        """
+        cur.execute(query, (data['city'], data['aqi'], data['pm25'], data['pm10']))
+        conn.commit()
+        return jsonify({"message": "Record created successfully"}), 201
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 400
+    finally:
+        conn.close()
+
+# --- 2.4: UPDATE (PUT) ---
+@app.route('/api/records/<int:record_id>', methods=['PUT'])
+def update_record(record_id):
+    try:
+        data = request.json
+        engine = get_sqlalchemy_engine()
+        with engine.begin() as conn:
+            # We use silver_id as the primary key from your table schema
+            query = text("""
+                UPDATE silver_air_quality 
+                SET aqi = :aqi, pm25 = :pm25, pm10 = :pm10
+                WHERE silver_id = :record_id
+            """)
+            conn.execute(query, {
+                "aqi": data.get('aqi'),
+                "pm25": data.get('pm25'),
+                "pm10": data.get('pm10'),
+                "record_id": record_id
+            })
+        return jsonify({"status": "success"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+# --- 2.5: DELETE (DELETE) ---
+@app.route('/api/records/<int:record_id>', methods=['DELETE'])
+def delete_record(record_id):
+    try:
+        # Connect to the database
+        engine = get_sqlalchemy_engine()
+        
+        with engine.begin() as conn:
+            # We use 'silver_id' to match your table column exactly
+            query = text("DELETE FROM silver_air_quality WHERE silver_id = :id")
+            
+            result = conn.execute(query, {"id": record_id})
+            
+            # Check if a row was actually deleted
+            if result.rowcount == 0:
+                return jsonify({"status": "error", "message": "Record not found"}), 404
+            
+        return jsonify({"status": "success", "message": "Record deleted successfully"})
+
+    except Exception as e:
+        print(f"Delete Error: {str(e)}")
+        return jsonify({"status": "error", "message": str(e)}), 500 
+
+# --- 2.6: Create an endpoint to run the scraper (scraping dataset) when user press "Refresh Button" from web client (frontend)
+@app.route('/api/scrape', methods=['POST'])
+def trigger_scrape():
+    # --- CONFIGURATION FROM .ENV ---
+    airflow_user = os.getenv("AIRFLOW_DB_USER", "airflow")
+    airflow_password = os.getenv("AIRFLOW_DB_PASSWORD", "airflow")
+    
+    # Using the DAG ID verified in your air_quality_dag.py
+    dag_id = "air_quality_Medallion_pipeline"
+    
+    # Using port 8081 based on your docker-compose mapping
+    # Using 127.0.0.1 is more stable than 'localhost' on Windows
+    airflow_url = f"http://127.0.0.1:8081/api/v1/dags/{dag_id}/dagRuns"
+
+    try:
+        print(f"--- Triggering Airflow DAG on port 8081: {dag_id} ---")
+        
+        # Trigger the DAG via POST request
+        response = requests.post(
+            airflow_url,
+            json={}, 
+            auth=HTTPBasicAuth(airflow_user, airflow_password),
+            timeout=10
+        )
+
+        if response.status_code in [200, 201]:
+            return jsonify({
+                "status": "success", 
+                "message": "Medallion Pipeline Triggered! Data is moving from Bronze to Gold."
+            })
+        elif response.status_code == 409:
+            return jsonify({
+                "status": "warning",
+                "message": "The pipeline is already running. Please check the Airflow UI at http://localhost:8081."
+            })
+        elif response.status_code == 401:
+            return jsonify({
+                "status": "error",
+                "message": "Authentication failed. Ensure AIRFLOW_DB_USER/PWD in .env matches Airflow UI login."
+            })
+        else:
+            return jsonify({
+                "status": "error", 
+                "message": f"Airflow Error: {response.status_code}",
+                "details": response.text
+            }), response.status_code
+
+    except requests.exceptions.ConnectionError:
+        return jsonify({
+            "status": "error", 
+            "message": "Connection Refused. Ensure Airflow containers are running and port 8081 is open."
+        }), 503
+    except Exception as e:
+        return jsonify({
+            "status": "error", 
+            "message": f"System Error: {str(e)}"
+        }), 500
+
+# Start the Flask server
+if __name__ == '__main__':    
+    app.run(port=8000, debug=True)

@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+.env
+
+# Docker & Databases
+postgres_data/
+airflow_db_volume/
+dw_db_volume/
+
+# Logs & Temp
+logs/
+
+# IDEs
+.vscode/
+.idea/
