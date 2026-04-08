@@ -18,7 +18,7 @@ from db_connection import get_sqlalchemy_engine, get_db_connection
 
 # Initialize the Flask application
 app = Flask(__name__, static_folder='src')
-CORS(app) # Allow cross-origin requests for the frontend to communicate with the backend
+CORS(app, resources={r"/api/*": {"origins": "*"}}, methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 
 # Create a function to standardize various forms of Saigon/HCMC and Kuala Lumpur to a consistency name
 def normalize_city_name(city_input):
@@ -134,28 +134,55 @@ def add_record():
         conn.close()
 
 # --- 2.4: UPDATE (PUT) ---
-@app.route('/api/records/<int:record_id>', methods=['PUT'])
-def update_record(record_id):
+# ==============================================================================
+# DATA MANAGEMENT: TARGETED UPDATE (AQI, PM2.5, PM10)
+# ==============================================================================
+
+@app.route('/api/update/<int:silver_id>', methods=['PUT'])
+def update_air_quality(silver_id):
+    """
+    Updates targeted parameters in the silver_air_quality table.
+    Aligned with UI: AQI, PM2.5, and PM10 only.
+    """
     try:
-        data = request.json
+        data = request.get_json()
+        
+        # Extract only the three parameters from your popup screenshot
+        aqi = data.get('aqi')
+        pm25 = data.get('pm25')
+        pm10 = data.get('pm10')
+
         engine = get_sqlalchemy_engine()
         with engine.begin() as conn:
-            # We use silver_id as the primary key from your table schema
+            # We only update the 3 UI fields + the metadata 'processed_at'
             query = text("""
                 UPDATE silver_air_quality 
-                SET aqi = :aqi, pm25 = :pm25, pm10 = :pm10
-                WHERE silver_id = :record_id
+                SET aqi = :aqi, 
+                    pm25 = :pm25, 
+                    pm10 = :pm10, 
+                    processed_at = CURRENT_TIMESTAMP
+                WHERE silver_id = :id
             """)
-            conn.execute(query, {
-                "aqi": data.get('aqi'),
-                "pm25": data.get('pm25'),
-                "pm10": data.get('pm10'),
-                "record_id": record_id
+            
+            result = conn.execute(query, {
+                'aqi': aqi,
+                'pm25': pm25,
+                'pm10': pm10,
+                'id': silver_id
             })
-        return jsonify({"status": "success"})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
 
+            if result.rowcount == 0:
+                return jsonify({"status": "error", "message": "Record ID not found"}), 404
+
+        return jsonify({
+            "status": "success", 
+            "message": f"Successfully updated ID {silver_id} (AQI, PM2.5, PM10)."
+        })
+
+    except Exception as e:
+        print(f"Update Error: {str(e)}")
+        return jsonify({"status": "error", "message": "Failed to update database"}), 500
+ 
 # --- 2.5: DELETE (DELETE) ---
 @app.route('/api/records/<int:record_id>', methods=['DELETE'])
 def delete_record(record_id):

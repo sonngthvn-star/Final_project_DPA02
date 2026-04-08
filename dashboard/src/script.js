@@ -185,35 +185,75 @@ async function loadManagementData() {
     }
 }
 
-// Function to handle the actual API update
-async function submitEdit() {
-    const recordId = document.getElementById('edit-id').value;
+// --- NEW CONSOLIDATED EDIT LOGIC ---
+
+/**
+ * A. Opens the Modal and populates it with existing row data
+ */
+function editRecord(id, aqi, pm25, pm10) {
+    // Fill the hidden ID input so the Save function knows which row to update
+    document.getElementById('edit-id').value = id;
+    
+    // Fill the visible input fields
+    document.getElementById('edit-aqi').value = aqi;
+    document.getElementById('edit-pm25').value = pm25;
+    document.getElementById('edit-pm10').value = pm10;
+    
+    // Update the subtitle so the user knows which record they are touching
+    document.getElementById('modal-subtitle').innerText = `Editing Record #${id}`;
+    
+    // Show the modal
+    document.getElementById('editModal').classList.remove('hidden');
+}
+
+/**
+ * B. Captures the new values and sends them to the NEW Flask route
+ */
+async function saveEdit() {
+    // a. Get the ID of the record being edited (usually stored in a hidden input or global variable)
+    const silverId = document.getElementById('edit-id').value; 
+
+    // 2. Capture the 3 parameters from your popup screenshot
     const updatedData = {
-        city: document.getElementById('edit-city').value,
         aqi: parseInt(document.getElementById('edit-aqi').value),
         pm25: parseFloat(document.getElementById('edit-pm25').value),
         pm10: parseFloat(document.getElementById('edit-pm10').value)
     };
 
     try {
-        const response = await fetch(`${API_BASE}/records/${recordId}`, { 
+        // b. Send the PUT request to the new endpoint
+        const response = await fetch(`${API_BASE}/update/${silverId}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+            },
             body: JSON.stringify(updatedData)
         });
-        
+
         const result = await response.json();
-        if (result.status === 'success') {
-            closeEditModal();      // This will now run
-            showToast("Updated!"); // This will now show
-            loadManagementData();  // Refresh the table
-            updateDashboard();     // Refresh the charts
+
+        if (response.ok && result.status === 'success') {
+            alert('Update Successful: ' + result.message);
+            
+            // c. Close the modal (Assuming you use a 'hidden' class or similar)
+            document.getElementById('editModal').classList.add('hidden');
+            
+            // d. Refresh the data table so the user sees the change immediately
+            if (typeof fetchSilverHistory === 'function') {
+                fetchSilverHistory(); 
+            }
         } else {
-            showToast(result.message || "Update failed", "error");
+            alert('Error: ' + (result.message || 'Failed to update record'));
         }
-    } catch (e) {
-        showToast("Server connection error", "error");
+    } catch (error) {
+        console.error('Update Request Failed:', error);
+        alert('System Error: Could not connect to the server.');
     }
+}
+
+// Close Modal
+function closeEditModal() {
+    document.getElementById('editModal').classList.add('hidden'); // Corrected to 'hidden'
 }
 
 // Robust deleteRecord and editRecord
@@ -232,23 +272,6 @@ async function deleteRecord(recordId) {
     } catch (error) {
         console.error("Delete crash:", error);
     }
-}
-
-// Multi-parameter Edit
-// Function to open the modal and fill data
-function editRecord(id, aqi, pm25, pm10) {
-    document.getElementById('edit-id').value = id;
-    document.getElementById('edit-aqi').value = aqi;
-    document.getElementById('edit-pm25').value = pm25;
-    document.getElementById('edit-pm10').value = pm10;
-    document.getElementById('modal-subtitle').innerText = `Record #${id}`;
-    
-    document.getElementById('editModal').classList.remove('hidden');
-}
-
-// Close Modal
-function closeEditModal() {
-    document.getElementById('editModal').classList.add('hidden'); // Corrected to 'hidden'
 }
 
 // --- 4. UTILITIES ---
