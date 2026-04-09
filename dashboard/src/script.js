@@ -35,6 +35,9 @@ function normalize(item) {
         AQI: Number(item.aqi || item.AQI || 0),
         PM25: Number(item.pm25 || item.PM25 || 0),
         PM10: Number(item.pm10 || item.PM10 || 0),
+        // Add these two lines to map the database values to the UI keys:
+        temperature: Number(item.temperature || item.Temperature || 0),
+        humidity: Number(item.humidity || item.Humidity || 0),
         Time: item.recorded_at || item.timestamp || item.Time || 'N/A'
     };
 }
@@ -163,6 +166,8 @@ async function loadManagementData() {
             const aqi = Number(record.AQI || 0);
             const pm25 = Number(record.PM25 || 0); // Ensure these are numbers
             const pm10 = Number(record.PM10 || 0);
+            const temp = Number(record.temperature || 0);
+            const hum = Number(record.humidity || 0);
 
             row.innerHTML = `
                 <td class="p-2 text-xs font-mono text-slate-400">#${recId}</td>
@@ -171,8 +176,10 @@ async function loadManagementData() {
                 <td class="p-2 font-bold text-blue-600">${aqi}</td>
                 <td class="p-2 font-bold text-blue-600">${pm25}</td>
                 <td class="p-2 font-bold text-blue-600">${pm10}</td>
+                <td class="p-2 font-bold text-blue-600">${temp}</td>
+                <td class="p-2 font-bold text-blue-600">${hum}</td>
                 <td class="p-2 text-right space-x-1">
-                    <button onclick="editRecord(${recId}, ${aqi}, ${pm25}, ${pm10})" class="hover:bg-blue-50 p-1 rounded-lg text-blue-500">✏️</button>
+                    <button onclick="editRecord(${recId}, ${aqi}, ${pm25}, ${pm10}, ${temp}, ${hum})" class="hover:bg-blue-50 p-1 rounded-lg text-blue-500">✏️</button>
                     <button onclick="deleteRecord(${recId})" class="hover:bg-red-50 p-1 rounded-lg text-red-500">🗑️</button>
                 </td>
             `;
@@ -190,7 +197,7 @@ async function loadManagementData() {
 /**
  * A. Opens the Modal and populates it with existing row data
  */
-function editRecord(id, aqi, pm25, pm10) {
+function editRecord(id, aqi, pm25, pm10, temp, hum) {
     // Fill the hidden ID input so the Save function knows which row to update
     document.getElementById('edit-id').value = id;
     
@@ -198,6 +205,8 @@ function editRecord(id, aqi, pm25, pm10) {
     document.getElementById('edit-aqi').value = aqi;
     document.getElementById('edit-pm25').value = pm25;
     document.getElementById('edit-pm10').value = pm10;
+    document.getElementById('edit-temp').value = temp;
+    document.getElementById('edit-hum').value = hum;
     
     // Update the subtitle so the user knows which record they are touching
     document.getElementById('modal-subtitle').innerText = `Editing Record #${id}`;
@@ -213,11 +222,13 @@ async function saveEdit() {
     // a. Get the ID of the record being edited (usually stored in a hidden input or global variable)
     const silverId = document.getElementById('edit-id').value; 
 
-    // 2. Capture the 3 parameters from your popup screenshot
+    // 2. Capture the 5 parameters from your popup screenshot
     const updatedData = {
         aqi: parseInt(document.getElementById('edit-aqi').value),
         pm25: parseFloat(document.getElementById('edit-pm25').value),
-        pm10: parseFloat(document.getElementById('edit-pm10').value)
+        pm10: parseFloat(document.getElementById('edit-pm10').value),
+        temperature: parseFloat(document.getElementById('edit-temp').value),
+        humidity: parseFloat(document.getElementById('edit-hum').value)
     };
 
     try {
@@ -554,8 +565,37 @@ function getAQIColor(value) {
     return '#7e0023'; // Hazardous (Maroon)
 }
 
-// This function runs automatically whenever the dashboard completes a sync
-// It uses the same data without interfering with maps or charts.
+// --- 5. AUTOMATION & SYNC LOGIC ---
+
+/**
+ * MASTER SYNC FUNCTION
+ * Orchestrates a full dashboard refresh from the PostgreSQL Gold/Silver layers.
+ * This removes the need for manual browser refreshes (F5).
+ */
+async function syncDashboard() {
+    console.log("🔄 Auto-syncing Dashboard components...");
+    
+    try {
+        // 1. Update the 'Last Updated' timestamp in the header
+        await refreshTimestamp();
+
+        // 2. Refresh the Map, Cards, and Charts (Gold/Silver Layers)
+        // This function already handles the fetch calls for history and current data
+        await updateDashboard(); 
+
+        // 3. Refresh the Data Management Table (Silver Layer)
+        await loadManagementData();
+
+        console.log("✅ Dashboard Sync Complete.");
+    } catch (err) {
+        console.warn("⚠️ Sync partially failed. Checking connection...", err);
+    }
+}
+
+/**
+ * UPDATED: refreshTimestamp
+ * Pulls the latest landing time from the Gold Layer.
+ */
 async function refreshTimestamp() {
     try {
         const response = await fetch(`${API_BASE}/current`);
@@ -575,9 +615,15 @@ async function refreshTimestamp() {
     }
 }
 
-// Hook this into your existing rotation
-setInterval(refreshTimestamp, 60000); // Update the time every 1 minute
-refreshTimestamp(); // Run once on load
+// --- 6. INITIALIZATION & TIMERS ---
 
-// Call this inside your window.onload so it loads initially
-window.onload = () => { initMap(); updateDashboard(); loadManagementData(); };
+window.onload = () => { 
+    initMap(); 
+    syncDashboard(); // Initial load
+};
+
+/**
+ * AUTO-REFRESH TIMER
+ * Triggers the master sync every 60 seconds.
+ */
+setInterval(syncDashboard, 60000); 

@@ -147,19 +147,23 @@ def update_air_quality(silver_id):
     try:
         data = request.get_json()
         
-        # Extract only the three parameters from your popup screenshot
+        # Extract the five parameters from the updated popup
         aqi = data.get('aqi')
         pm25 = data.get('pm25')
         pm10 = data.get('pm10')
+        temperature = data.get('temperature') # Added
+        humidity = data.get('humidity')       # Added
 
         engine = get_sqlalchemy_engine()
         with engine.begin() as conn:
-            # We only update the 3 UI fields + the metadata 'processed_at'
+            # Updating the 5 UI fields + the metadata 'processed_at'
             query = text("""
                 UPDATE silver_air_quality 
                 SET aqi = :aqi, 
                     pm25 = :pm25, 
-                    pm10 = :pm10, 
+                    pm10 = :pm10,
+                    temperature = :temp,
+                    humidity = :hum,      
                     processed_at = CURRENT_TIMESTAMP
                 WHERE silver_id = :id
             """)
@@ -168,6 +172,8 @@ def update_air_quality(silver_id):
                 'aqi': aqi,
                 'pm25': pm25,
                 'pm10': pm10,
+                'temp': temperature,
+                'hum': humidity,
                 'id': silver_id
             })
 
@@ -176,7 +182,7 @@ def update_air_quality(silver_id):
 
         return jsonify({
             "status": "success", 
-            "message": f"Successfully updated ID {silver_id} (AQI, PM2.5, PM10)."
+            "message": f"Successfully updated ID {silver_id} (AQI, PM2.5, PM10, Temp, Hum)."
         })
 
     except Exception as e:
