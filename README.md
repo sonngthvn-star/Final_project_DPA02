@@ -18,7 +18,7 @@ The system processes data through three distinct stages to ensure high data inte
 <img src="pipeline_architecture.jpg" alt="DPA Pipeline Architecture" width="850">
 
 
-<strong>Figure 1: Medallion Architecture Data Flow (WAQI API to Dashboard)</strong>
+<strong>Figure 1: Medallion Architecture Data Flow (OWM API to Dashboard)</strong>
 </p>
 
 ________________________________________
