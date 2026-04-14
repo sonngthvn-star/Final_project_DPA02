@@ -1,7 +1,7 @@
 # 🌍 Air Quality Monitoring Pipeline (DPA Final Project):
    - An End-to-End Data Engineering Pipeline.
    -  Combining Python Project PY4E03 and DPA ETL PIPELINE.
-   -  This project implements a Medallion Architecture to transform raw WAQI API data into high-performance insights for air quality monitoring.
+   -  This project implements a Medallion Architecture to transform raw data from OpenWeatherMap Air Pollution API source into high-performance insights for air quality monitoring.
 ________________________________________
 
 ### 🏗️ 1. Project Architecture & Data Flow:
