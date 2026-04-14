@@ -47,7 +47,8 @@ x-airflow-common:
     DB_ROOT_NAME: ${DB_ROOT_NAME}
     
     # Add your new API token here so the containers can see it
-    WAQI_API_TOKEN: ${WAQI_API_TOKEN}
+    # WAQI_API_TOKEN: ${WAQI_API_TOKEN}
+    OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY}
 
     # PYTHONPATH: Ensures the Python interpreter looks in the /scripts folder for your modules.
     PYTHONPATH: /opt/airflow/scripts

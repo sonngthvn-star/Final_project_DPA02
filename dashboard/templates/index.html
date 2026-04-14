@@ -27,7 +27,7 @@
             </div>
             <div class="flex items-center space-x-6">
                 <div class="text-right">
-                    <p class="text-[10px] uppercase font-bold text-indigo-200 tracking-widest">LAST API FETCHED FROM WAQI</p>
+                    <p class="text-[10px] uppercase font-bold text-indigo-200 tracking-widest">LAST API FETCHED FROM OWM</p>
                     <p id="last-update-time" class="text-xl font-bold">N/A</p>
                 </div>
                 <button onclick="exportToPDF()" class="bg-white text-[#3b36db] px-5 py-2 rounded-lg font-bold hover:bg-indigo-50 shadow-lg flex items-center gap-2 transition-transform active:scale-95">
@@ -115,13 +115,35 @@
                     </div>
 
                     <div class="pt-2 border-t">
-                        <label class="text-[10px] font-bold text-slate-400 uppercase block mb-2">Parameter Selection</label>
+                        <label class="text-[10px] font-bold text-slate-400 uppercase block mb-2">Select Parameters To Plot</label>
                         <div class="grid grid-cols-2 gap-2 text-[11px] font-bold">
-                            <label class="flex items-center space-x-2"><input type="checkbox" class="param-toggle" value="PM25" checked> <span>PM2.5</span></label>
-                            <label class="flex items-center space-x-2"><input type="checkbox" class="param-toggle" value="PM10"> <span>PM10</span></label>
+                            <label class="flex items-center space-x-2">
+                                <input type="checkbox" class="param-toggle" value="PM25" checked> 
+                                <span>PM2.5</span>
+                            </label>
+                            <label class="flex items-center space-x-2">
+                                <input type="checkbox" class="param-toggle" value="PM10"> 
+                                <span>PM10</span>
+                            </label>
+                            <label class="flex items-center space-x-2">
+                                <input type="checkbox" class="param-toggle" value="CO"> 
+                                <span>CO</span>
+                            </label>
+                            <label class="flex items-center space-x-2">
+                                <input type="checkbox" class="param-toggle" value="NO2"> 
+                                <span>NO<sub>2</sub></span>
+                            </label>
+                            <label class="flex items-center space-x-2">
+                                <input type="checkbox" class="param-toggle" value="O3"> 
+                                <span>O<sub>3</sub></span>
+                            </label>
+                            <label class="flex items-center space-x-2">
+                                <input type="checkbox" class="param-toggle" value="SO2"> 
+                                <span>SO<sub>2</sub></span>
+                            </label>
                         </div>
-                    </div>
-
+                    </div>                
+                    
                     <div class="pt-2 border-t">
                         <p class="text-[10px] font-bold text-slate-400 uppercase mb-2">Regional Selection</p>
                         <div class="space-y-1 max-h-48 overflow-y-auto custom-scroll text-xs font-medium">
@@ -174,6 +196,18 @@
                         <div class="bg-slate-50 p-2 rounded-xl"><p class="text-[9px] text-slate-400 font-bold">PM2.5</p><p id="pm25-Saigon" class="text-xl font-black">--</p></div>
                         <div class="bg-slate-50 p-2 rounded-xl"><p class="text-[9px] text-slate-400 font-bold">PM10</p><p id="pm10-Saigon" class="text-xl font-black">--</p></div>
                     </div>
+                    <div class="flex justify-between items-center px-4">
+                        <p class="text-[12px] text-blue-600 font-bold uppercase tracking-wider">🌡️Temperature</p>
+                        <p class="text-sm font-black text-blue-800"><span id="saigon-temp">--</span><span class="text-[10px] font-normal">°C</span></p>
+                    </div>
+                    <div class="flex justify-between items-center px-4">
+                        <p class="text-[12px] text-blue-600 font-bold uppercase tracking-wider">💧Humidity</p>
+                        <p class="text-sm font-black text-blue-800"><span id="saigon-hum">--</span><span class="text-[10px] font-normal">%</span></p>
+                    </div>
+                    <div class="col-span-3 bg-blue-50/50 p-2 rounded-xl flex justify-between items-center px-4 mt-1 border border-blue-100">
+                        <p class="text-[12px] text-blue-600 font-bold uppercase tracking-wider">🌧️Annual Total Rainfall</p>
+                        <p class="text-sm font-black text-blue-800"><span id="saigon-annual-rain">--</span> <span class="text-[10px] font-normal">mm</span></p>
+                    </div>                    
                 </div>
 
                 <div id="card-Hanoi" class="p-6 rounded-2xl bg-white shadow-sm border-l-8 border-slate-200">
@@ -189,6 +223,18 @@
                         <div class="bg-slate-50 p-2 rounded-xl"><p class="text-[9px] text-slate-400 font-bold">PM2.5</p><p id="pm25-Hanoi" class="text-xl font-black">--</p></div>
                         <div class="bg-slate-50 p-2 rounded-xl"><p class="text-[9px] text-slate-400 font-bold">PM10</p><p id="pm10-Hanoi" class="text-xl font-black">--</p></div>
                     </div>
+                    <div class="flex justify-between items-center px-4">
+                        <p class="text-[12px] text-blue-600 font-bold uppercase tracking-wider">🌡️Temperature</p>
+                        <p class="text-sm font-black text-blue-800"><span id="hanoi-temp">--</span><span class="text-[10px] font-normal">°C</span></p>
+                    </div>
+                    <div class="flex justify-between items-center px-4">
+                        <p class="text-[12px] text-blue-600 font-bold uppercase tracking-wider">💧Humidity</p>
+                        <p class="text-sm font-black text-blue-800"><span id="hanoi-hum">--</span><span class="text-[10px] font-normal">%</span></p>
+                    </div>                    
+                    <div class="col-span-3 bg-blue-50/50 p-2 rounded-xl flex justify-between items-center px-4 mt-1 border border-blue-100">
+                        <p class="text-[12px] text-blue-600 font-bold uppercase tracking-wider">🌧️Annual Total Rainfall</p>
+                        <p class="text-sm font-black text-blue-800"><span id="hanoi-annual-rain">--</span> <span class="text-[10px] font-normal">mm</span></p>
+                    </div>
                 </div>
             </div>
 
@@ -198,7 +244,7 @@
             </div>
 
             <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                <h2 class="text-xs font-black text-slate-500 mb-4 uppercase tracking-widest">PM2.5 / PM10 @ HCM & Hanoi - Comparison with Other Cities @ Hourly</h2>
+                <h2 class="text-xs font-black text-slate-500 mb-4 uppercase tracking-widest">PM2.5 / PM10 / Toxic Gas @ HCM & Hanoi - Comparison with Other Cities @ Hourly</h2>
                 <div class="h-[300px]"><canvas id="secondaryChart"></canvas></div>
             </div>
 
@@ -246,6 +292,10 @@
                                 <th class="p-2 font-semibold">AQI</th>
                                 <th class="p-2 font-semibold">PM2.5</th>
                                 <th class="p-2 font-semibold">PM10</th>
+                                <th class="p-2 font-semibold">CO</th>
+                                <th class="p-2 font-semibold">NO2</th>
+                                <th class="p-2 font-semibold">O3</th>
+                                <th class="p-2 font-semibold">SO2</th>
                                 <th class="px-4 py-3">Temp (°C)</th>
                                 <th class="px-4 py-3">Hum (%)</th>
                                 <th class="p-2 font-semibold text-right">Actions</th>
@@ -321,7 +371,7 @@
                 </div>
                 
                 <div class="flex gap-6 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                    <a href="#" class="hover:text-blue-600 transition-colors">Data Source: WAQI API</a>
+                    <a href="#" class="hover:text-blue-600 transition-colors">Data Source: OpenWeatherMap (OWM) API</a>
                     <a href="#" class="hover:text-blue-600 transition-colors">System Status: Online</a>
                 </div>
             </div>

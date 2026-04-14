@@ -34,11 +34,18 @@ function normalize(item) {
         City: item.city_name || item.city || item.City || 'N/A',
         AQI: Number(item.aqi || item.AQI || 0),
         PM25: Number(item.pm25 || item.PM25 || 0),
-        PM10: Number(item.pm10 || item.PM10 || 0),
-        // Add these two lines to map the database values to the UI keys:
-        temperature: Number(item.temperature || item.Temperature || 0),
-        humidity: Number(item.humidity || item.Humidity || 0),
-        Time: item.recorded_at || item.timestamp || item.Time || 'N/A'
+        PM10: Number(item.pm10 || item.PM10 || 0),     
+        CO: Number(item.co || 0),
+        NO2: Number(item.no2 || 0),
+        O3: Number(item.o3 || 0),
+        SO2: Number(item.so2 || 0),        
+        Temperature: Number(item.temperature || item.Temperature || 0),
+        Humidity: Number(item.humidity || item.Humidity || 0),        
+        // RAINFALL REFINEMENTS:
+        // Maps lowercase database keys to the Capitalized keys used in your logic
+        AnnualTotalRain: Number(item.annual_total_rain || item.AnnualTotalRain || 0),
+        CurrentRain: Number(item.current_rain || item.CurrentRain || item.rain_1h || 0),        
+        Time: item.recorded_at || item.time || item.Time || 'N/A'
     };
 }
 
@@ -52,6 +59,7 @@ async function updateDashboard() {
 
         if (currentData.length > 0) {                  
             ['Saigon', 'Hanoi'].forEach(city => {
+                // Find data in the normalized array (normalize function should handle key casing)
                 const cityInfo = currentData.find(d => d.City === city);
                 if (cityInfo) {
                     const theme = getAqiTheme(cityInfo.AQI);
@@ -61,14 +69,34 @@ async function updateDashboard() {
                     document.getElementById(`label-${city}`).innerText = theme.label;
                     document.getElementById(`label-${city}`).className = `px-2 py-1 rounded text-[10px] font-black uppercase ${theme.bg} ${theme.text}`;
                     document.getElementById(`card-${city}`).className = `p-6 rounded-2xl bg-white shadow-sm border-l-8 ${theme.tailwind}`;
+
+                    // NEW: Update Temperature
+                    const tempElem = document.getElementById(`${city.toLowerCase()}-temp`);
+                    if (tempElem) {
+                        tempElem.innerText = cityInfo.Temperature ? cityInfo.Temperature.toFixed(1) : '--';
+                    }
+                    // NEW: Update Humidity
+                    const humElem = document.getElementById(`${city.toLowerCase()}-hum`);
+                    if (humElem) {
+                        humElem.innerText = cityInfo.Humidity ? Math.round(cityInfo.Humidity) : '--';
+                    }
+                    // NEW: Update Annual Total Rainfall in Saigon/Hanoi Cards
+                    // Ensure your normalize function maps 'annual_total_rain' to 'AnnualTotalRain' or similar
+                    const annualRainElem = document.getElementById(`${city.toLowerCase()}-annual-rain`);
+                    if (annualRainElem) {
+                        // Get the value, default to 0 if null/undefined, then format to 2 decimals
+                        const rainValue = cityInfo.AnnualTotalRain || cityInfo.annual_total_rain || 0;
+                        annualRainElem.innerText = parseFloat(rainValue).toFixed(2);                        
+                    }
                 }
             });
         }
     
-        // B. Fetch HISTORY for Charts & Map from SILVER LAYER
+        // B. Fetch HISTORY for Charts & Map from SILVER LAYER        
         const type1 = document.getElementById('type-top').value;
         const type2 = document.getElementById('type-bottom').value;
-        const selectedParams = Array.from(document.querySelectorAll('.param-toggle:checked')).map(p => p.value); 
+        // Get checked pollutants (PM25, PM10, CO, NO2, O3, SO2)
+        const selectedParams = Array.from(document.querySelectorAll('.param-toggle:checked')).map(p => p.value);         
         const selectedCities = Array.from(document.querySelectorAll('.city-toggle:checked')).map(cb => cb.value);
         const citiesToChart = [...new Set(['Saigon', 'Hanoi', ...selectedCities])];
         
@@ -108,12 +136,17 @@ async function updateDashboard() {
                             fill: type1 === 'area' 
                         });
                     
+                    /* --- MODIFICATION START: SECONDARY CHART DATA LOOP --- */
+                    // We loop through the selectedParams (which now includes CO, NO2, etc.)
+                    // and match them against the normalized data keys.
                     selectedParams.forEach(p => {
                         paramds.push({ 
-                            label: `${city} ${p}`, data: data.map(d => d[p]), 
+                            label: `${city} ${p}`, 
+                            data: data.map(d => d[p.toUpperCase()] || 0), // Accesses d.CO, d.NO2, etc.
                             borderColor: cityColors[city], 
                             backgroundColor: cityColors[city] + (type2 === 'bar' ? 'e6' : '22'), 
-                            fill: type2==='area'
+                            fill: type2 === 'area'                    
+                    
                         });
                     });
                 }
@@ -166,8 +199,12 @@ async function loadManagementData() {
             const aqi = Number(record.AQI || 0);
             const pm25 = Number(record.PM25 || 0); // Ensure these are numbers
             const pm10 = Number(record.PM10 || 0);
-            const temp = Number(record.temperature || 0);
-            const hum = Number(record.humidity || 0);
+            const temp = Number(record.Temperature || 0);
+            const hum = Number(record.Humidity || 0);
+            const co = Number(record.CO || 0);
+            const no2 = Number(record.NO2 || 0);
+            const o3 = Number(record.O3 || 0);
+            const so2 = Number(record.SO2 || 0);                          
 
             row.innerHTML = `
                 <td class="p-2 text-xs font-mono text-slate-400">#${recId}</td>
@@ -176,6 +213,10 @@ async function loadManagementData() {
                 <td class="p-2 font-bold text-blue-600">${aqi}</td>
                 <td class="p-2 font-bold text-blue-600">${pm25}</td>
                 <td class="p-2 font-bold text-blue-600">${pm10}</td>
+                <td class="p-2 font-bold text-emerald-600">${co}</td>
+                <td class="p-2 font-bold text-emerald-600">${no2}</td>
+                <td class="p-2 font-bold text-emerald-600">${o3}</td>
+                <td class="p-2 font-bold text-emerald-600">${so2}</td>
                 <td class="p-2 font-bold text-blue-600">${temp}</td>
                 <td class="p-2 font-bold text-blue-600">${hum}</td>
                 <td class="p-2 text-right space-x-1">
@@ -204,7 +245,7 @@ function editRecord(id, aqi, pm25, pm10, temp, hum) {
     // Fill the visible input fields
     document.getElementById('edit-aqi').value = aqi;
     document.getElementById('edit-pm25').value = pm25;
-    document.getElementById('edit-pm10').value = pm10;
+    document.getElementById('edit-pm10').value = pm10;    
     document.getElementById('edit-temp').value = temp;
     document.getElementById('edit-hum').value = hum;
     
@@ -226,7 +267,7 @@ async function saveEdit() {
     const updatedData = {
         aqi: parseInt(document.getElementById('edit-aqi').value),
         pm25: parseFloat(document.getElementById('edit-pm25').value),
-        pm10: parseFloat(document.getElementById('edit-pm10').value),
+        pm10: parseFloat(document.getElementById('edit-pm10').value),        
         temperature: parseFloat(document.getElementById('edit-temp').value),
         humidity: parseFloat(document.getElementById('edit-hum').value)
     };

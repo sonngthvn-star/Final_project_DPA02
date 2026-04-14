@@ -62,8 +62,8 @@ def get_current_data():
     Fetches the latest snapshot from the GOLD layer for dashboard cards and map.
     """
     try:
-        # 1. Update query to include the "time" column from your Gold view
-        query = 'SELECT city, aqi, pm25, pm10, "time" FROM gold_latest_snapshot'
+        # 1. Included temperature, humidity, and new rain metrics from the view
+        query = 'SELECT city, aqi, pm25, pm10, temperature, humidity, current_rain, annual_total_rain, "time" FROM gold_latest_snapshot'
         df = pd.read_sql(query, engine) # Read the data from the database
         
         # 2. Format the 'time' column to a readable string
@@ -83,7 +83,7 @@ def get_all_history():
     """
     try:
         # This feeds the data management table on Dashboard (Frontend)
-        query = "SELECT * FROM silver_air_quality ORDER BY recorded_at ASC"
+        query = "SELECT * FROM silver_air_quality ORDER BY recorded_at DESC LIMIT 500"
         df = pd.read_sql(query, engine)
         return jsonify(df.to_dict(orient='records'))
     except Exception as e:
@@ -99,13 +99,29 @@ def get_city_history(city):
     Fetches historical data for a specific city to populate charts.
     """
     try:
-        # This feeds the specific city charts (Saigon, Hanoi, Perth, etc.)
-        # Wrap the query in text() to enable :city parameter mapping
-        query = text("SELECT * FROM silver_air_quality WHERE city_name = :city ORDER BY recorded_at ASC")
-        
+        # We use SELECT * to keep all existing data (PM25, temperature, etc.)
+        # and add to_char() to create 'time_label' for the Chart.js X-axis.
+        query = text("""
+            SELECT *, to_char(recorded_at, 'HH24:MI') as time_label 
+            FROM silver_air_quality 
+            WHERE city_name = :city 
+            ORDER BY recorded_at ASC
+        """)
+               
         # Pass the dictionary to params
+        # Execute the query using the established engine
         df = pd.read_sql(query, engine, params={"city": normalized_city})
-        
+
+        # Fill NaN/Null values with 0 so the chart displays a clean baseline
+        if not df.empty:
+            # List of all numeric columns that need to be clean for Chart.js
+            numeric_cols = ['rain_1h', 'pm25', 'pm10', 'co', 'no2', 'o3', 'so2', 'temperature', 'humidity']
+            
+            # Fill NaN with 0 only for columns that actually exist in the dataframe
+            for col in numeric_cols:
+                if col in df.columns:
+                    df[col] = df[col].fillna(0)     
+                    
         return jsonify(df.to_dict(orient='records'))
     except Exception as e:
         return jsonify({"error": str(e)}), 500    
